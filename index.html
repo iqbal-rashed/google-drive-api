@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Google Drive Api</title>
+        <style>
+            body {
+                margin: 0;
+                text-align: center;
+                font-family: Arial, Helvetica, sans-serif;
+            }
+            .header {
+                background: rgb(224, 242, 224, 0.5);
+                padding: 0px 150px;
+                line-height: 80px;
+                height: 80px;
+                border-bottom: 1px solid rgb(224, 242, 224, 0.6);
+            }
+            .title {
+                font-weight: 700;
+                font-size: 30px;
+                float: left;
+                color: #3c84f8;
+            }
+            .auth-buttons {
+                float: right;
+            }
+            .signin,
+            .signout {
+                border: 0px;
+                padding: 10px 70px;
+                background: #3c84f8;
+                color: white;
+                outline: none;
+                cursor: pointer;
+                font-size: 16px;
+                margin-top: 20px;
+                visibility: hidden;
+            }
+            .actions {
+                padding: 0px 300px;
+            }
+            textarea {
+                width: calc(100% - 40px);
+                height: 450px;
+                margin: 20px auto;
+                background: rgb(224, 242, 224, 0.2);
+                border: 1px solid rgb(224, 242, 224, 1);
+                padding: 10px 20px;
+                font-size: 18px;
+            }
+            textarea:focus {
+                outline: none;
+            }
+            .upload {
+                border: 0px;
+                outline: none;
+                padding: 8px 30px;
+                border: 2px solid (224, 242, 224, 0.2);
+                float: right;
+                background-color: blueviolet;
+                color: white;
+                cursor: pointer;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="title">Google Drive Api</div>
+            <div class="auth-buttons">
+                <button
+                    id="signin_btn"
+                    class="signin"
+                    onclick="handleAuthClick()"
+                >
+                    Sign In
+                </button>
+                <button
+                    id="signout_btn"
+                    class="signout"
+                    onclick="handleSignoutClick()"
+                >
+                    Sign Out
+                </button>
+            </div>
+        </div>
+        <div class="actions">
+            <textarea id="content" placeholder="Enter text here"></textarea>
+        </div>
+
+        <script type="text/javascript">
+            const CLIENT_ID =
+                "700238736421-blqii7e0ivfq4p4cnfra6k9jbjituvto.apps.googleusercontent.com";
+            const API_KEY = "AIzaSyBSJrMCnEaREFckhU_TpldR-YssitJjXwg";
+
+            const DISCOVERY_DOC =
+                "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
+
+            const SCOPES =
+                "https://www.googleapis.com/auth/drive.metadata.readonly";
+
+            let tokenClient;
+            let gapiInited = false;
+            let gisInited = false;
+
+            document.getElementById("signin_btn").style.visibility = "hidden";
+            document.getElementById("signout_btn").style.visibility = "hidden";
+
+            function gapiLoaded() {
+                gapi.load("client", initializeGapiClient);
+            }
+
+            async function initializeGapiClient() {
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: [DISCOVERY_DOC],
+                });
+                gapiInited = true;
+                maybeEnableButtons();
+            }
+
+            function gisLoaded() {
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: "",
+                });
+                gisInited = true;
+                maybeEnableButtons();
+            }
+
+            function maybeEnableButtons() {
+                if (gapiInited && gisInited) {
+                    document.getElementById("signin_btn").style.visibility =
+                        "visible";
+                }
+            }
+
+            function handleAuthClick() {
+                tokenClient.callback = async (resp) => {
+                    if (resp.error !== undefined) {
+                        throw resp;
+                    }
+                    document.getElementById("signout_btn").style.visibility =
+                        "visible";
+                    document.getElementById("signin_btn").innerText = "Refresh";
+                    await listFiles();
+                };
+
+                if (gapi.client.getToken() === null) {
+                    // Prompt the user to select a Google Account and ask for consent to share their data
+                    // when establishing a new session.
+                    tokenClient.requestAccessToken({ prompt: "consent" });
+                } else {
+                    // Skip display of account chooser and consent dialog for an existing session.
+                    tokenClient.requestAccessToken({ prompt: "" });
+                }
+            }
+
+            /**
+             *  Sign out the user upon button click.
+             */
+            function handleSignoutClick() {
+                const token = gapi.client.getToken();
+                if (token !== null) {
+                    google.accounts.oauth2.revoke(token.access_token);
+                    gapi.client.setToken("");
+                    document.getElementById("content").innerText = "";
+                    document.getElementById("signin_btn").innerText = "Sign In";
+                    document.getElementById("signout_btn").style.visibility =
+                        "hidden";
+                }
+            }
+
+            /**
+             * Print metadata for first 10 files.
+             */
+            async function listFiles() {
+                let response;
+                try {
+                    response = await gapi.client.drive.files.list({
+                        pageSize: 10,
+                        fields: "files(id, name)",
+                    });
+                } catch (err) {
+                    document.getElementById("content").innerText = err.message;
+                    return;
+                }
+                const files = response.result.files;
+                if (!files || files.length == 0) {
+                    document.getElementById("content").innerText =
+                        "No files found.";
+                    return;
+                }
+                // Flatten to string to display
+                const output = files.reduce(
+                    (str, file) => `${str}${file.name} (${file.id}\n`,
+                    "Files:\n"
+                );
+                document.getElementById("content").innerText =
+                    JSON.stringify(files);
+            }
+        </script>
+        <script
+            async
+            defer
+            src="https://apis.google.com/js/api.js"
+            onload="gapiLoaded()"
+        ></script>
+        <script
+            async
+            defer
+            src="https://accounts.google.com/gsi/client"
+            onload="gisLoaded()"
+        ></script>
+    </body>
+</html>
